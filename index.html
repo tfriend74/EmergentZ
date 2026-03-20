@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Door of Doom - Zombie Escape</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(circle at center, #1f1f1f 0%, #090909 70%);
+      }
+
+      .game-shell {
+        border: 2px solid #623;
+        box-shadow: 0 0 30px rgba(255, 40, 40, 0.18);
+        padding: 12px;
+        background: #110b0b;
+      }
+
+      canvas {
+        display: block;
+        border: 2px solid #3d2f2f;
+        background: #161616;
+        cursor: crosshair;
+      }
+
+      .hint {
+        color: #ddd;
+        font-size: 0.95rem;
+        margin: 8px 0 0;
+        opacity: 0.9;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="game-shell">
+      <canvas id="game" width="960" height="600"></canvas>
+      <p class="hint">WASD = move | Mouse = aim | Click = shoot | Reach the back door to win.</p>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("game");
+      const ctx = canvas.getContext("2d");
+
+      const world = {
+        w: canvas.width,
+        h: canvas.height,
+        backDoor: { x: canvas.width - 86, y: 32, w: 54, h: 80 },
+      };
+
+      const keys = new Set();
+      const mouse = { x: canvas.width / 2, y: canvas.height / 2, down: false };
+
+      const player = {
+        x: 90,
+        y: canvas.height / 2,
+        r: 16,
+        speed: 250,
+        hp: 100,
+        weapon: "pistol",
+        lastShot: 0,
+      };
+
+      const weaponStats = {
+        pistol: { damage: 20, cooldown: 240, speed: 620, spread: 0, pellets: 1, color: "#ffe066" },
+        shotgun: { damage: 14, cooldown: 520, speed: 560, spread: 0.22, pellets: 6, color: "#ffb703" },
+      };
+
+      const pickups = [
+        {
+          type: "shotgun",
+          x: world.w * 0.5,
+          y: world.h * 0.55,
+          r: 16,
+          taken: false,
+        },
+      ];
+
+      const bullets = [];
+      const zombies = [];
+
+      let spawnTimer = 0;
+      let totalTime = 0;
+      let gameState = "playing"; // playing | won | lost
+
+      function spawnZombie() {
+        const edge = Math.floor(Math.random() * 4);
+        let x = 0;
+        let y = 0;
+        if (edge === 0) {
+          x = Math.random() * world.w;
+          y = -20;
+        } else if (edge === 1) {
+          x = world.w + 20;
+          y = Math.random() * world.h;
+        } else if (edge === 2) {
+          x = Math.random() * world.w;
+          y = world.h + 20;
+        } else {
+          x = -20;
+          y = Math.random() * world.h;
+        }
+
+        zombies.push({ x, y, r: 18, hp: 40, speed: 55 + Math.random() * 20 });
+      }
+
+      function normalize(x, y) {
+        const len = Math.hypot(x, y) || 1;
+        return { x: x / len, y: y / len };
+      }
+
+      function circleHit(a, b) {
+        return Math.hypot(a.x - b.x, a.y - b.y) <= a.r + b.r;
+      }
+
+      function shoot(now) {
+        const gun = weaponStats[player.weapon];
+        if (now - player.lastShot < gun.cooldown) {
+          return;
+        }
+        player.lastShot = now;
+
+        const baseAngle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        for (let i = 0; i < gun.pellets; i += 1) {
+          const offset = (Math.random() - 0.5) * gun.spread;
+          const a = baseAngle + offset;
+          bullets.push({
+            x: player.x,
+            y: player.y,
+            r: 4,
+            damage: gun.damage,
+            vx: Math.cos(a) * gun.speed,
+            vy: Math.sin(a) * gun.speed,
+            life: 1.1,
+            color: gun.color,
+          });
+        }
+      }
+
+      function update(dt, now) {
+        if (gameState !== "playing") {
+          return;
+        }
+
+        totalTime += dt;
+        spawnTimer += dt;
+
+        const spawnDelay = Math.max(0.45, 1.2 - totalTime * 0.015);
+        if (spawnTimer >= spawnDelay) {
+          spawnTimer = 0;
+          spawnZombie();
+        }
+
+        let dx = 0;
+        let dy = 0;
+        if (keys.has("w")) dy -= 1;
+        if (keys.has("s")) dy += 1;
+        if (keys.has("a")) dx -= 1;
+        if (keys.has("d")) dx += 1;
+        const v = normalize(dx, dy);
+        player.x += v.x * player.speed * dt;
+        player.y += v.y * player.speed * dt;
+
+        player.x = Math.max(player.r, Math.min(world.w - player.r, player.x));
+        player.y = Math.max(player.r, Math.min(world.h - player.r, player.y));
+
+        if (mouse.down) {
+          shoot(now);
+        }
+
+        for (const p of pickups) {
+          if (!p.taken && circleHit(player, p)) {
+            p.taken = true;
+            if (p.type === "shotgun") {
+              player.weapon = "shotgun";
+            }
+          }
+        }
+
+        for (const b of bullets) {
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
+          b.life -= dt;
+        }
+
+        for (const z of zombies) {
+          const toward = normalize(player.x - z.x, player.y - z.y);
+          z.x += toward.x * z.speed * dt;
+          z.y += toward.y * z.speed * dt;
+
+          if (circleHit(player, z)) {
+            player.hp -= 28 * dt;
+          }
+        }
+
+        for (const b of bullets) {
+          for (const z of zombies) {
+            if (z.hp > 0 && circleHit(b, z)) {
+              z.hp -= b.damage;
+              b.life = 0;
+              break;
+            }
+          }
+        }
+
+        for (let i = bullets.length - 1; i >= 0; i -= 1) {
+          const b = bullets[i];
+          if (b.life <= 0 || b.x < -40 || b.x > world.w + 40 || b.y < -40 || b.y > world.h + 40) {
+            bullets.splice(i, 1);
+          }
+        }
+
+        for (let i = zombies.length - 1; i >= 0; i -= 1) {
+          if (zombies[i].hp <= 0) {
+            zombies.splice(i, 1);
+          }
+        }
+
+        if (player.hp <= 0) {
+          gameState = "lost";
+        }
+
+        const inDoor =
+          player.x + player.r > world.backDoor.x &&
+          player.x - player.r < world.backDoor.x + world.backDoor.w &&
+          player.y + player.r > world.backDoor.y &&
+          player.y - player.r < world.backDoor.y + world.backDoor.h;
+
+        if (inDoor) {
+          gameState = "won";
+        }
+      }
+
+      function drawGrid() {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= world.w; x += 48) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, world.h);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= world.h; y += 48) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(world.w, y);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function draw() {
+        ctx.fillStyle = "#131313";
+        ctx.fillRect(0, 0, world.w, world.h);
+        drawGrid();
+
+        ctx.fillStyle = "#654321";
+        ctx.fillRect(world.backDoor.x, world.backDoor.y, world.backDoor.w, world.backDoor.h);
+        ctx.fillStyle = "#d8b07c";
+        ctx.fillRect(world.backDoor.x + 8, world.backDoor.y + 8, world.backDoor.w - 16, world.backDoor.h - 16);
+
+        for (const p of pickups) {
+          if (p.taken) continue;
+          ctx.fillStyle = "#8ecae6";
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#041322";
+          ctx.fillRect(p.x - 13, p.y - 4, 26, 8);
+          ctx.fillRect(p.x + 8, p.y - 2, 12, 4);
+        }
+
+        for (const b of bullets) {
+          ctx.fillStyle = b.color;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (const z of zombies) {
+          ctx.fillStyle = "#5abf54";
+          ctx.beginPath();
+          ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#111";
+          ctx.beginPath();
+          ctx.arc(z.x - 6, z.y - 2, 2.5, 0, Math.PI * 2);
+          ctx.arc(z.x + 6, z.y - 2, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        const angle = Math.atan2(mouse.y - player.y, mouse.x - player.x);
+        ctx.strokeStyle = "#f0f0f0";
+        ctx.lineWidth = 7;
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(player.x + Math.cos(angle) * 24, player.y + Math.sin(angle) * 24);
+        ctx.stroke();
+
+        ctx.fillStyle = "#e63946";
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        drawHud();
+        if (gameState !== "playing") {
+          drawEndScreen();
+        }
+      }
+
+      function drawHud() {
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.fillRect(16, world.h - 90, 340, 74);
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "18px sans-serif";
+        ctx.fillText(`HP: ${Math.max(0, player.hp | 0)}`, 28, world.h - 58);
+        ctx.fillText(`Weapon: ${player.weapon.toUpperCase()}`, 28, world.h - 32);
+
+        ctx.fillStyle = "#ffcb77";
+        ctx.fillText("Objective: Reach the back door", 22, 36);
+      }
+
+      function drawEndScreen() {
+        ctx.fillStyle = "rgba(0,0,0,0.65)";
+        ctx.fillRect(0, 0, world.w, world.h);
+        ctx.fillStyle = "#fff";
+        ctx.textAlign = "center";
+        ctx.font = "bold 56px sans-serif";
+        ctx.fillText(gameState === "won" ? "YOU ESCAPED" : "YOU DIED", world.w / 2, world.h / 2 - 24);
+        ctx.font = "24px sans-serif";
+        ctx.fillText("Press R to restart", world.w / 2, world.h / 2 + 26);
+        ctx.textAlign = "left";
+      }
+
+      function resetGame() {
+        player.x = 90;
+        player.y = canvas.height / 2;
+        player.hp = 100;
+        player.weapon = "pistol";
+        bullets.length = 0;
+        zombies.length = 0;
+        spawnTimer = 0;
+        totalTime = 0;
+        gameState = "playing";
+        for (const p of pickups) p.taken = false;
+      }
+
+      window.addEventListener("keydown", (e) => {
+        const key = e.key.toLowerCase();
+        if (["w", "a", "s", "d"].includes(key)) {
+          keys.add(key);
+        }
+        if (key === "r" && gameState !== "playing") {
+          resetGame();
+        }
+      });
+
+      window.addEventListener("keyup", (e) => {
+        keys.delete(e.key.toLowerCase());
+      });
+
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+      });
+
+      canvas.addEventListener("mousedown", () => {
+        mouse.down = true;
+      });
+
+      window.addEventListener("mouseup", () => {
+        mouse.down = false;
+      });
+
+      let last = performance.now();
+      function loop(now) {
+        const dt = Math.min(0.033, (now - last) / 1000);
+        last = now;
+        update(dt, now);
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      requestAnimationFrame(loop);
+    </script>
+  </body>
+</html>
