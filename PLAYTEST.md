@@ -2,6 +2,8 @@
 
 Open Assets/EMERGENTZ/Scenes/Prototype.unity and press Play. Click inside the Game view. WASD moves, mouse aims, and holding left click fires. R restarts after death.
 
+Rifle correction: movement now strafes/backpedals without turning away from camera aim. A muzzle attached to the rifle mesh supplies both tracer origin and damage-ray origin. The camera selects the crosshair target; the barrel ray checks intervening cover. Camera and animated pose update before aiming/firing. The rifle alignment Play Mode check passed for four aim directions, muzzle origin, barrel/tracer agreement, target kills and blocking cover.
+
 The player uses Quaternius Matt with his rifle and idle/run animations. Zombies use the Basic zombie model and animations. Kenney's additional blasters are available under Assets/ThirdParty/KenneyBlasters; weapon switching is not implemented.
 
 Enter the five-metre ring around the campfire to heal and become immune to damage. Infection, score time and wave scheduling pause while resting. Shooting is disabled inside camp. Leaving restores normal play; resting never cures the infection.

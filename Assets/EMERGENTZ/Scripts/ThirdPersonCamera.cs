@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 
 namespace Emergentz
 {
+    [DefaultExecutionOrder(100)]
     public sealed class ThirdPersonCamera : MonoBehaviour
     {
         [SerializeField] Transform target;
