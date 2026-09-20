@@ -13,6 +13,7 @@ namespace Emergentz
         [SerializeField] InfectionClock infectionClock;
         [SerializeField] float secondsBetweenWaves = 18f;
         [SerializeField] float spawnRadius = 24f;
+        [SerializeField] GameObject zombieVisual;
 
         readonly List<ZombieAgent> zombies = new List<ZombieAgent>();
         float nextWaveTime;
@@ -46,6 +47,7 @@ namespace Emergentz
                 return;
             }
 
+            if (survivor.IsAtCamp) { nextWaveTime += Time.deltaTime; return; }
             runTime += Time.deltaTime;
             if (Time.time >= nextWaveTime)
             {
@@ -68,6 +70,7 @@ namespace Emergentz
             float radius = spawnRadius + Random.Range(-4f, 7f);
             Vector3 position = survivor.transform.position + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * radius;
             position.y = 1f;
+            if (CampfireCheckpoint.Contains(position)) return;
 
             GameObject body = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             body.name = $"Zombie_W{Wave}_{index + 1}";
@@ -80,6 +83,11 @@ namespace Emergentz
             character.radius = 0.45f;
             character.center = Vector3.zero;
             ZombieAgent zombie = body.AddComponent<ZombieAgent>();
+            if (zombieVisual != null)
+            {
+                body.GetComponent<Renderer>().enabled = false;
+                Instantiate(zombieVisual, body.transform).transform.localPosition = Vector3.down;
+            }
             zombie.Configure(survivor, Wave);
             zombies.Add(zombie);
         }

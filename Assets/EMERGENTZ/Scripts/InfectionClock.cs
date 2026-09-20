@@ -16,6 +16,7 @@ namespace Emergentz
         void Update()
         {
             if (PrototypeGameManager.Instance == null || PrototypeGameManager.Instance.RunEnded) return;
+            if (PrototypeGameManager.Instance.Survivor.IsAtCamp) return;
             RemainingSeconds = Mathf.Max(0f, RemainingSeconds - Time.deltaTime);
             if (RemainingSeconds <= 0f) PrototypeGameManager.Instance.EndRun("THE INFECTION WON");
         }

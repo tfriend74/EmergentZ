@@ -11,6 +11,7 @@ namespace Emergentz
         float speed;
         float damage;
         float nextAttackTime;
+        bool dead;
 
         public void Configure(SurvivorController survivor, int level)
         {
@@ -34,6 +35,7 @@ namespace Emergentz
             if (distance > 1.45f)
             {
                 Vector3 direction = toTarget.normalized;
+                if (CampfireCheckpoint.Contains(transform.position + direction * (speed * Time.deltaTime + 0.8f))) return;
                 transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), 8f * Time.deltaTime);
                 controller.SimpleMove(direction * speed);
             }
@@ -46,8 +48,10 @@ namespace Emergentz
 
         public void TakeDamage(float amount)
         {
+            if (dead) return;
             health -= amount;
             if (health > 0f) return;
+            dead = true;
             PrototypeGameManager.Instance?.RegisterKill();
             Destroy(gameObject);
         }
